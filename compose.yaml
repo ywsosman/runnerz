@@ -1,0 +1,17 @@
+# Local development database.
+# Spring Boot starts this automatically when you run the app (spring-boot-docker-compose),
+# or start it yourself with: docker compose up -d
+services:
+  postgres:
+    image: 'postgres:17'
+    environment:
+      - 'POSTGRES_DB=runnerz'
+      - 'POSTGRES_USER=runnerz'
+      - 'POSTGRES_PASSWORD=runnerz'
+    ports:
+      - '5432:5432'
+    volumes:
+      - 'postgres-data:/var/lib/postgresql/data'
+
+volumes:
+  postgres-data:

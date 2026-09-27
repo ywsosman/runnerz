@@ -32,7 +32,7 @@ It stores runs in a database, validates what you send it, loads sample data on s
 - Filter runs by location (`INDOOR` / `OUTDOOR`)
 - Request validation with clear `400 Bad Request` responses
 - `404 Not Found` for missing runs on read, update and delete
-- SQL persistence with Spring's `JdbcClient` and an H2 database that runs inside the app
+- SQL persistence with Spring's `JdbcClient` and PostgreSQL running in Docker (started automatically with the app)
 - Sample runs loaded from a JSON file when the database is empty
 - Read-only proxy to [JSONPlaceholder](https://jsonplaceholder.typicode.com) users using Spring's `RestClient`
 - Tests for the repository, the controller, the REST client and the full application context
@@ -43,7 +43,7 @@ It stores runs in a database, validates what you send it, loads sample data on s
 |---|---|
 | Language | Java 21+ (records, text blocks) |
 | Framework | Spring Boot 4.1.1 (Spring MVC) |
-| Database | H2 (in-memory), accessed with `JdbcClient` |
+| Database | PostgreSQL 17 in Docker (Docker Compose), accessed with `JdbcClient`; H2 in-memory for tests |
 | Validation | Jakarta Bean Validation (Hibernate Validator) |
 | JSON | Jackson 3 (`tools.jackson.databind`) |
 | HTTP client | Spring `RestClient` |
@@ -54,7 +54,8 @@ It stores runs in a database, validates what you send it, loads sample data on s
 
 - **JDK 21 or newer.** The project sets `java.version` to 21, and any newer JDK also works.
 - You **don't** need Maven installed. Use the wrapper that comes with the project.
-- You **don't** need to install a database. H2 runs inside the application.
+- **Docker Desktop, installed and running.** Postgres runs in a container, so you don't install Postgres itself.
+- You **don't** need Docker to run the tests. They use an in-memory H2 database.
 
 > **Windows note:** If `java -version` prints `1.8`, your PATH points at an old Java 8. Set `JAVA_HOME` to a JDK 21+ before using the Maven wrapper, or run everything from IntelliJ with the project SDK set to 21+ (**File → Project Structure → Project → SDK**).
 
@@ -62,6 +63,7 @@ It stores runs in a database, validates what you send it, loads sample data on s
 
 ### From IntelliJ IDEA
 
+0. **Start Docker Desktop** and wait until it shows "Engine running". The app starts the Postgres container itself.
 1. Open the project folder. IntelliJ detects `pom.xml` and imports it as a Maven project.
 2. If you changed `pom.xml`, click the **Maven reload** icon.
 3. Run `RunnerzApplication` (the green arrow next to `main`).
@@ -139,7 +141,7 @@ RunController      ← validates the body (@Valid), maps URLs to methods
 RunRepository      ← runs SQL with JdbcClient
     │
     ▼
-H2 database (table: run)
+PostgreSQL in Docker (table: run)
 ```
 
 ## Data model
@@ -216,15 +218,50 @@ Missing runs throw `RunNotFoundException`. It's annotated with `@ResponseStatus(
 
 ## Database
 
-Settings in `application.properties`:
+The app uses **PostgreSQL 17 running in Docker**, defined in `compose.yaml`:
+
+| Setting | Value |
+|---|---|
+| Host / port | `localhost:5432` |
+| Database | `runnerz` |
+| Username / password | `runnerz` / `runnerz` (local development only) |
+| Data volume | `postgres-data` (keeps your data between restarts) |
+
+### How the app connects
+
+The `spring-boot-docker-compose` dependency does the wiring for you. When you start the app, Spring Boot:
+
+1. Finds `compose.yaml` in the project root.
+2. Runs `docker compose up` if the container isn't already running.
+3. Reads the Postgres settings from the container and configures the datasource automatically.
+
+That's why `application.properties` has no URL, username or password:
 
 ```properties
-spring.datasource.url=jdbc:h2:mem:runnerz
 spring.sql.init.mode=always
 ```
 
-- `jdbc:h2:mem:runnerz` is an **in-memory** database. It's created on startup and **deleted when the app stops**.
-- `spring.sql.init.mode=always` tells Spring to run `schema.sql` on every startup.
+`spring.sql.init.mode=always` makes Spring run `schema.sql` on every startup. Spring only does that automatically for in-memory databases, so a real Postgres needs this setting.
+
+### Managing the container yourself
+
+```bash
+docker compose up -d        # start Postgres in the background
+docker compose ps           # check that it's running
+docker compose logs postgres
+docker compose down         # stop it (data is kept in the volume)
+docker compose down -v      # stop it AND delete all data
+```
+
+To open a SQL prompt inside the container:
+
+```bash
+docker compose exec postgres psql -U runnerz -d runnerz
+```
+
+Then try `SELECT * FROM run;` and type `\q` to quit. You can also connect IntelliJ's **Database** tool window to `localhost:5432` with the details above.
+
+### The schema
 
 `schema.sql` creates this table:
 
@@ -242,13 +279,6 @@ CREATE TABLE IF NOT EXISTS run (
 
 `JdbcClient` maps columns to record fields by name. It converts `snake_case` to `camelCase` automatically, so `started_on` becomes `startedOn`.
 
-### Switching to a real database later
-
-The repository uses plain SQL, so moving to PostgreSQL mostly means:
-
-1. Replacing the `h2` dependency with `org.postgresql:postgresql`.
-2. Setting `spring.datasource.url`, `username` and `password` in `application.properties`.
-
 ## Sample data
 
 On startup, `RunDataLoader` (a `CommandLineRunner`) checks `runRepository.count()`:
@@ -256,7 +286,7 @@ On startup, `RunDataLoader` (a `CommandLineRunner`) checks `runRepository.count(
 - If the table is **empty**, it reads `src/main/resources/data/runs.json` and inserts 5 sample runs.
 - If the table **already has rows**, it skips the load.
 
-Because H2 is in-memory, the table is always empty on startup, so the sample runs come back on every restart.
+Postgres keeps its data in a Docker volume, so the sample runs are loaded **once**, the first time you start the app. After that, your own changes stay put. To start over with just the sample data, run `docker compose down -v` and start the app again.
 
 ## Users API (external)
 
@@ -275,7 +305,7 @@ Run all tests:
 | Test class | What it starts | What it checks |
 |---|---|---|
 | `RunnerzApplicationTests` | The whole application | The Spring context starts, including the schema and the sample data load |
-| `RunRepositoryTest` | Only database beans (`@JdbcTest`) | Queries against a real H2 database. Each test is rolled back afterwards. |
+| `RunRepositoryTest` | Only database beans (`@JdbcTest`) | Queries against an in-memory H2 database. Each test is rolled back afterwards. |
 | `RunControllerTest` | Only the web layer (`@WebMvcTest`) | Status codes, JSON output, validation. The repository is a Mockito mock (`@MockitoBean`). |
 | `UserRestClientTest` | Only the REST client (`@RestClientTest`) | JSON parsing, using `MockRestServiceServer` to fake JSONPlaceholder |
 
@@ -332,13 +362,17 @@ Useful curl options:
 | Code from a video has `id: 1` in it | That's an IntelliJ **parameter hint**, not code. Type only the value: `new Run(1, ...)`. |
 | New dependencies aren't found in IntelliJ | Click the Maven **reload** icon after editing `pom.xml`. |
 | `/api/users` returns an error | The app needs internet access to reach jsonplaceholder.typicode.com. |
-| Data I created disappeared | Expected: H2 is in-memory and resets on every restart. |
+| `failed to connect to the docker API` / `dockerDesktopLinuxEngine` on startup | Docker Desktop isn't running. Start it, wait until it says "Engine running", then run the app again. |
+| `Port 5432 is already allocated` / `address already in use` | Another Postgres (a local install or another container) is already using port 5432. Stop it, or change the left side of `'5432:5432'` in `compose.yaml`, e.g. `'5433:5432'`. |
+| Data I created disappeared | You probably ran `docker compose down -v`, which deletes the volume. Plain `docker compose down` keeps data. |
+| Old data or schema won't go away | Run `docker compose down -v` to wipe the database, then start the app again. |
 
 ## Next steps
 
 Ideas for extending the project:
 
-- Switch to PostgreSQL (e.g. with Docker Compose) so data survives restarts
+- Use Flyway for database migrations instead of `schema.sql`
+- Run the tests against a real Postgres with Testcontainers
 - Let the database generate `id` values instead of sending them in the request body
 - Return a JSON error body (e.g. with `ProblemDetail`) instead of an empty 400/404
 - Add paging and sorting to `GET /api/runs`
