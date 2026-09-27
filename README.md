@@ -21,8 +21,6 @@ It stores runs in a database, validates what you send it, loads sample data on s
 - [Users API (external)](#users-api-external)
 - [Testing](#testing)
 - [Trying the API](#trying-the-api)
-- [Troubleshooting](#troubleshooting)
-- [Next steps](#next-steps)
 
 ---
 
@@ -351,30 +349,3 @@ Useful curl options:
 | `-X METHOD` | Use `POST`, `PUT` or `DELETE` |
 | `-H "Name: value"` | Add a request header |
 | `-d 'body'` | Send a request body |
-
-## Troubleshooting
-
-| Problem | Cause / fix |
-|---|---|
-| `unsupported class file major version` or `release version 21 not supported` | Maven is using an old JDK. Point `JAVA_HOME` at JDK 21+, or set the project SDK in IntelliJ. |
-| `Port 8080 was already in use` | Another app (or an earlier run) is still running. Stop it, or add `server.port=8081` to `application.properties`. |
-| `java: unexpected type, required: variable, found: value` | You used `=` (assignment) where you meant `==` (comparison). |
-| Code from a video has `id: 1` in it | That's an IntelliJ **parameter hint**, not code. Type only the value: `new Run(1, ...)`. |
-| New dependencies aren't found in IntelliJ | Click the Maven **reload** icon after editing `pom.xml`. |
-| `/api/users` returns an error | The app needs internet access to reach jsonplaceholder.typicode.com. |
-| `failed to connect to the docker API` / `dockerDesktopLinuxEngine` on startup | Docker Desktop isn't running. Start it, wait until it says "Engine running", then run the app again. |
-| `Port 5432 is already allocated` / `address already in use` | Another Postgres (a local install or another container) is already using port 5432. Stop it, or change the left side of `'5432:5432'` in `compose.yaml`, e.g. `'5433:5432'`. |
-| Data I created disappeared | You probably ran `docker compose down -v`, which deletes the volume. Plain `docker compose down` keeps data. |
-| Old data or schema won't go away | Run `docker compose down -v` to wipe the database, then start the app again. |
-
-## Next steps
-
-Ideas for extending the project:
-
-- Use Flyway for database migrations instead of `schema.sql`
-- Run the tests against a real Postgres with Testcontainers
-- Let the database generate `id` values instead of sending them in the request body
-- Return a JSON error body (e.g. with `ProblemDetail`) instead of an empty 400/404
-- Add paging and sorting to `GET /api/runs`
-- Add an integration test that starts the full app and calls it over HTTP
-- Store users locally and link runs to users
