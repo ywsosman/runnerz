@@ -1,0 +1,59 @@
+### All runs
+GET http://localhost:8080/api/runs
+
+### One run
+GET http://localhost:8080/api/runs/1
+
+### Missing run (expect 404)
+GET http://localhost:8080/api/runs/99
+
+### Runs by location
+GET http://localhost:8080/api/runs/location/OUTDOOR
+
+### Create a run (expect 201)
+POST http://localhost:8080/api/runs
+Content-Type: application/json
+
+{
+  "id": 10,
+  "title": "Sunday Hill Repeats",
+  "startedOn": "2026-09-27T08:00:00",
+  "completedOn": "2026-09-27T08:40:00",
+  "miles": 4,
+  "location": "OUTDOOR"
+}
+
+### Invalid run - blank title (expect 400)
+POST http://localhost:8080/api/runs
+Content-Type: application/json
+
+{
+  "id": 11,
+  "title": "",
+  "startedOn": "2026-09-27T08:00:00",
+  "completedOn": "2026-09-27T08:40:00",
+  "miles": 4,
+  "location": "OUTDOOR"
+}
+
+### Update a run (expect 204)
+PUT http://localhost:8080/api/runs/10
+Content-Type: application/json
+
+{
+  "id": 10,
+  "title": "Sunday Hill Repeats (hard)",
+  "startedOn": "2026-09-27T08:00:00",
+  "completedOn": "2026-09-27T08:50:00",
+  "miles": 5,
+  "location": "OUTDOOR"
+}
+
+### Delete a run (expect 204)
+DELETE http://localhost:8080/api/runs/10
+
+### Users from the external API
+GET http://localhost:8080/api/users
+
+### One user
+GET http://localhost:8080/api/users/1
